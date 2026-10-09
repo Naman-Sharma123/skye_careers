@@ -1,0 +1,24 @@
+{
+  "name": "job-scrapper",
+  "version": "1.0.0",
+  "description": "",
+  "main": "scrapper.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@json2csv/plainjs": "^7.0.8",
+    "axios": "^1.20.0",
+    "cheerio": "^1.2.0",
+    "dotenv": "^17.4.2",
+    "json2csv": "^6.0.0-alpha.2",
+    "node-cron": "^4.6.0",
+    "pg": "^8.23.1",
+    "playwright": "^1.62.1",
+    "rss-parser": "^3.13.0"
+  }
+}

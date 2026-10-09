@@ -1,0 +1,42 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model JobScrape {
+  id             String   @id @default(cuid())
+  title          String
+  company        String?
+  location       String?
+  country        String?
+  state          String?
+  city           String?
+  jobType        String?
+  employmentType String?
+  experience     String?
+  salary         String?
+  description    String?
+  skills         String[] @default([])
+  source         String
+  sourceJobId    String?
+  sourceUrl      String?
+  postedDate     DateTime?
+  rawData        Json?
+  dedupeKey      String   @unique
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([title])
+  @@index([company])
+  @@index([location])
+  @@index([country])
+  @@index([jobType])
+  @@index([experience])
+  @@index([source])
+  @@index([postedDate])
+  @@map("job_scrape")
+}

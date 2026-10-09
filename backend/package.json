@@ -1,0 +1,24 @@
+{
+  "name": "job-scrapper-backend",
+  "version": "1.0.0",
+  "private": true,
+  "description": "REST API and PostgreSQL storage for the job aggregation platform",
+  "main": "src/server.js",
+  "scripts": {
+    "dev": "nodemon src/server.js",
+    "start": "node src/server.js",
+    "import:jobs": "node scripts/importJobs.js",
+    "prisma:generate": "prisma generate",
+    "prisma:push": "prisma db push"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.16.2",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.2",
+    "express": "^5.1.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.10",
+    "prisma": "^6.16.2"
+  }
+}
