@@ -1,0 +1,88 @@
+# Job Scraper
+
+Node.js scripts for collecting job listings from Himalayas and Wellfound. Scrapers write JSON files locally; the PostgreSQL API and database importer are documented separately in [`backend/README.md`](backend/README.md).
+
+## Project layout
+
+```text
+job-scrapper/
+├── backend/                    # Express API, Prisma schema, JSON-to-database importer
+├── output/                     # Generated scrape files (not committed)
+├── scripts/
+│   ├── himalayas-jobs/scrape.mjs # Himalayas API scraper (worker thread)
+│   ├── wellfound-jobs/           # Wellfound scraper and PostgreSQL pipeline
+│   ├── scrapper.js               # Combined Himalayas + Wellfound scraper
+│   ├── automated_scraper.js      # Older scheduled combined scraper
+│   └── debug_job.js              # Himalayas API debugging helper
+├── package.json
+└── README.md
+```
+
+## Requirements
+
+- Node.js 18 or newer (the scripts use built-in `fetch` and worker threads).
+- npm.
+- Internet access to the job sources.
+- PostgreSQL only if you plan to run a PostgreSQL pipeline or import results into the backend.
+
+Install scraper dependencies from this directory:
+
+```bash
+npm install
+```
+
+## Scrape Himalayas
+
+The dedicated Himalayas scraper requests up to 10,000 jobs and saves progress to `output/himalayas_jobs.json`:
+
+```bash
+node scripts/himalayas-jobs/scrape.mjs
+```
+
+It deduplicates records while collecting them and periodically saves progress, so the output file can be retained if a run ends early. This script stores the source API records in their raw shape.
+
+## Scrape both sources
+
+The combined scraper collects up to 250 Himalayas jobs and Wellfound listings, then writes `himalayas_jobs.json`, `wellfound_jobs.json`, and `all_jobs.json` in the current working directory:
+
+```bash
+node scripts/scrapper.js
+```
+
+Run it from the project root so the JSON files are created there. This script scrapes and saves files; it does not import them into the backend database.
+
+## Import jobs into the backend database
+
+The backend importer reads a JSON array whose records use normalized fields such as `source`, `jobId`, `title`, and `jobUrl`. The combined scraper's Himalayas output is normalized for this importer. From the project root:
+
+```bash
+cd backend
+npm install
+npx prisma generate
+npx prisma db push
+node scripts/importJobs.js ..\himalayas_jobs.json
+```
+
+Set `DATABASE_URL` in `backend/.env` before running the Prisma or importer commands. The importer reports imported, duplicate, skipped, and invalid records. See [`backend/README.md`](backend/README.md) for database setup and API details.
+
+The dedicated `scripts/himalayas-jobs/scrape.mjs` output is raw API data, so use the normalized output from `scripts/scrapper.js` for the importer as written.
+
+## Wellfound pipeline
+
+`scripts/wellfound-jobs/job-pipeline.js` is a separate Wellfound-to-PostgreSQL pipeline. It loads its environment from `scripts/wellfound-jobs/.env`, writes JSON under `output/`, and starts an hourly schedule when run normally. Configure PostgreSQL variables (`DATABASE_URL` or `PGHOST`, `PGUSER`, `PGPASSWORD`, and `PGDATABASE`) before using it:
+
+```bash
+node scripts/wellfound-jobs/job-pipeline.js
+```
+
+To sync the previously saved filtered JSON without scraping, use:
+
+```bash
+node scripts/wellfound-jobs/job-pipeline.js --sync-output
+```
+
+Stop a scheduled run with `Ctrl+C`. Do not commit `.env` files or database credentials.
+
+## Generated data and Git
+
+Scraped JSON can be large and changes frequently. Keep generated files in `output/` (or another local data location) and exclude them from Git, along with `node_modules/` and `.env` files. Commit the scraper source, package files, and documentation instead.
