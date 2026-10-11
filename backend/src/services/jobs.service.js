@@ -37,11 +37,36 @@ function mapIncomingJob(item) {
     .map((part) => (clean(part) || '').toLowerCase()).join('|');
   const identity = sourceJobId ? `${source}|id|${sourceJobId}`
     : sourceUrl ? `${source}|url|${sourceUrl}` : fallbackIdentity;
-  const skills = Array.isArray(item.skills)
-    ? item.skills.map(clean).filter(Boolean)
-    : typeof item.skills === 'string'
-      ? item.skills.split(/[,;]/).map(clean).filter(Boolean)
-      : [];
+  const experienceParts = [item.experienceMin, item.experienceMax]
+    .filter((value) => value !== null && value !== undefined && value !== '');
+  const experience = experienceParts.length
+    ? (experienceParts.length === 2
+      ? `${experienceParts[0]}-${experienceParts[1]} years`
+      : `${experienceParts[0]}+ years`)
+    : clean(item.experience);
+
+  let salary = clean(item.salary);
+  if (!salary && (item.minSalary !== undefined || item.maxSalary !== undefined)) {
+    const curr = clean(item.currency) || 'USD';
+    const period = item.salaryPeriod ? ` / ${item.salaryPeriod}` : '';
+    if (item.minSalary && item.maxSalary) {
+      salary = `${curr} ${item.minSalary} - ${item.maxSalary}${period}`;
+    } else if (item.minSalary) {
+      salary = `${curr} ${item.minSalary}+${period}`;
+    } else if (item.maxSalary) {
+      salary = `Up to ${curr} ${item.maxSalary}${period}`;
+    }
+  }
+
+  let skills = [];
+  if (Array.isArray(item.skills)) {
+    skills = item.skills.map(clean).filter(Boolean);
+  } else if (typeof item.skills === 'string') {
+    skills = item.skills.split(/[,;]/).map(clean).filter(Boolean);
+  } else if (Array.isArray(item.categories)) {
+    skills = item.categories.map(clean).filter(Boolean);
+  }
+
   const timestamp = item.postedAt ?? item.pubDate;
 
   return {
@@ -53,8 +78,8 @@ function mapIncomingJob(item) {
     city: clean(item.city),
     jobType: clean(item.jobType),
     employmentType: clean(item.employmentType),
-    experience: clean(item.experience),
-    salary: clean(item.salary),
+    experience,
+    salary,
     description: clean(item.description),
     skills,
     source,
@@ -102,7 +127,7 @@ function buildWhere(query) {
   return where;
 }
 
-async function listJobs(query, pagination) {
+async function listJobs(query, pagination = {}) {
   const where = buildWhere(query);
   const sort = query.sort === undefined ? 'newest' : textFilter(query.sort, 'sort');
   if (!['newest', 'oldest', 'relevance'].includes(sort)) {
@@ -113,19 +138,57 @@ async function listJobs(query, pagination) {
   const orderBy = sort === 'oldest'
     ? [{ postedDate: 'asc' }, { createdAt: 'asc' }]
     : [{ postedDate: 'desc' }, { createdAt: 'desc' }];
+
+  const queryOptions = {
+    where,
+    orderBy,
+    select: {
+      id: true,
+      title: true,
+      company: true,
+      location: true,
+      country: true,
+      state: true,
+      city: true,
+      jobType: true,
+      employmentType: true,
+      experience: true,
+      salary: true,
+      description: true,
+      skills: true,
+      source: true,
+      sourceJobId: true,
+      sourceUrl: true,
+      postedDate: true,
+      createdAt: true,
+      updatedAt: true,
+    },
+  };
+  if (pagination.isPaginated) {
+    if (pagination.skip !== undefined) queryOptions.skip = pagination.skip;
+    if (pagination.limit !== undefined) queryOptions.take = pagination.limit;
+  }
+
   const [jobs, totalJobs] = await Promise.all([
-    prisma.jobScrape.findMany({ where, skip: pagination.skip, take: pagination.limit, orderBy }),
+    prisma.jobScrape.findMany(queryOptions),
     prisma.jobScrape.count({ where }),
   ]);
-  return {
+
+  const result = {
     jobs,
-    pagination: {
+    totalJobs,
+  };
+
+  if (pagination.isPaginated && pagination.limit) {
+    result.pagination = {
       page: pagination.page,
       limit: pagination.limit,
       totalJobs,
       totalPages: Math.ceil(totalJobs / pagination.limit),
-    },
-  };
+    };
+  }
+
+  return result;
 }
 
 async function getJobById(id) {
@@ -165,4 +228,4 @@ async function createJobs(input) {
   };
 }
 
-module.exports = { createJobs, listJobs, getJobById };
+module.exports = { createJobs, listJobs, getJobById, mapIncomingJob };

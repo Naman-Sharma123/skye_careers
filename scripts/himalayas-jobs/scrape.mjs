@@ -3,8 +3,12 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { Worker, isMainThread, parentPort, workerData } from 'node:worker_threads';
 
+import dotenv from 'dotenv';
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+dotenv.config({ path: path.resolve(__dirname, '../../backend/.env') });
 
 // Output JSON location
 const OUTPUT_DIR = path.resolve(__dirname, '../../output');
@@ -13,7 +17,7 @@ const OUTPUT_FILE = path.join(OUTPUT_DIR, 'himalayas_jobs.json');
 const TARGET_JOBS_COUNT = 10000;
 const BASE_URL = 'https://himalayas.app/jobs/api';
 const DELAY_MS = 250;
-const JOBS_API_URL = process.env.JOBS_API_URL || 'http://localhost:5000/api/jobs';
+const JOBS_API_URL = process.env.JOBS_API_URL || 'https://skye-careers.onrender.com/api/jobs';
 const JOBS_API_KEY = process.env.JOBS_API_KEY;
 const API_BATCH_MAX_BYTES = 700 * 1024;
 

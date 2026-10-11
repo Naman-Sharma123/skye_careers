@@ -12,8 +12,17 @@ async function createJobs(req, res, next) {
 
 async function listJobs(req, res, next) {
   try {
-    const result = await jobsService.listJobs(req.query, parsePagination(req.query));
-    res.json({ success: true, data: result.jobs, pagination: result.pagination });
+    const pagination = parsePagination(req.query);
+    const result = await jobsService.listJobs(req.query, pagination);
+    const response = {
+      success: true,
+      totalJobs: result.totalJobs,
+      data: result.jobs,
+    };
+    if (result.pagination) {
+      response.pagination = result.pagination;
+    }
+    res.json(response);
   } catch (error) {
     next(error);
   }

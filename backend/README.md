@@ -71,33 +71,28 @@ The response reports `received`, `created`, `duplicates`, and `skipped` counts. 
 
 To generate an upload key locally, run `node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"`, then enter the same generated value as `JOBS_API_KEY` in Render and in the scraper's environment. Do not commit the key or paste it into source code.
 
-`GET /api/jobs` supports `page`, `limit` (1–100), `search`, `location`, `country`, `city`, `jobType`, `employmentType`, `experience`, `company`, `source`, and `sort`. Text filters are case-insensitive partial matches. `search` checks title, company, skills, location, and description. `sort=newest` is the default; `sort=oldest` reverses posted-date order. `sort=relevance` is accepted and currently uses newest-first ordering because the available Prisma setup does not provide full-text relevance ranking.
+`GET /api/jobs` returns all matching jobs by default without pagination. It supports `search`, `location`, `country`, `city`, `jobType`, `employmentType`, `experience`, `company`, `source`, and `sort`. Text filters are case-insensitive partial matches. `search` checks title, company, skills, location, and description. `sort=newest` is the default; `sort=oldest` reverses posted-date order. `sort=relevance` is accepted. Optional pagination parameters (`page`, `limit`) can still be provided if custom slicing is needed.
 
 Examples:
 
 ```text
 http://localhost:5000/api/health
 http://localhost:5000/api/jobs
-http://localhost:5000/api/jobs?page=2&limit=20
 http://localhost:5000/api/jobs?search=react
 http://localhost:5000/api/jobs?location=Delhi
 http://localhost:5000/api/jobs?search=react&location=Delhi&experience=1-3
 http://localhost:5000/api/jobs?sort=oldest&country=India
+http://localhost:5000/api/jobs?limit=50
 http://localhost:5000/api/jobs/<job-id>
 ```
 
-List response:
+List response (unpaginated infinite fetch):
 
 ```json
 {
   "success": true,
-  "data": [],
-  "pagination": {
-    "page": 1,
-    "limit": 20,
-    "totalJobs": 6239,
-    "totalPages": 312
-  }
+  "totalJobs": 8804,
+  "data": [ ... ]
 }
 ```
 

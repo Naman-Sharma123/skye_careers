@@ -46,17 +46,16 @@ In another terminal, from the project root:
 node scripts/himalayas-jobs/scrape.mjs
 ```
 
-The backend must be running and connected to PostgreSQL. Set `JOBS_API_URL` to the API endpoint if it is not at `http://localhost:5000/api/jobs`. For a deployed API, set `JOBS_API_KEY` to the same secret configured on the backend. The scraper deduplicates records while collecting them, periodically saves progress, then uploads jobs in size-limited batches. It stores the source API records in their raw shape; the API maps the common Himalayas fields. If the upload fails, the JSON file remains available and the script exits with an error.
+The script defaults to the live API at `https://skye-careers.onrender.com/api/jobs`. To use a local or alternate API, set `JOBS_API_URL` before running it. For the live API, set `JOBS_API_KEY` to the same secret configured on the Render backend. The scraper deduplicates records while collecting them, periodically saves progress, then uploads jobs in size-limited batches. It stores the source API records in their raw shape; the API maps the common Himalayas fields. If the upload fails, the JSON file remains available and the script exits with an error.
 
-To upload to a deployed Render backend from PowerShell, set these in the same terminal before running the scraper:
+To upload to the default live API from PowerShell, set its upload key in the same terminal before running the scraper:
 
 ```powershell
-$env:JOBS_API_URL = "https://YOUR-RENDER-SERVICE.onrender.com/api/jobs"
 $env:JOBS_API_KEY = "YOUR_RENDER_JOBS_API_KEY"
 node scripts\himalayas-jobs\scrape.mjs
 ```
 
-Use your actual Render service URL and the same secret stored in the backend service's `JOBS_API_KEY` setting.
+Use the same secret stored in the Render backend service's `JOBS_API_KEY` setting. Do not commit or share the key.
 
 ## Scrape both sources
 
