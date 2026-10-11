@@ -14,6 +14,7 @@ const TARGET_JOBS_COUNT = 10000;
 const BASE_URL = 'https://himalayas.app/jobs/api';
 const DELAY_MS = 250;
 const JOBS_API_URL = process.env.JOBS_API_URL || 'http://localhost:5000/api/jobs';
+const JOBS_API_KEY = process.env.JOBS_API_KEY;
 const API_BATCH_MAX_BYTES = 700 * 1024;
 
 const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
@@ -151,9 +152,11 @@ if (isMainThread) {
 
         async function sendBatch() {
             if (batch.length === 0) return;
+            const headers = { 'Content-Type': 'application/json' };
+            if (JOBS_API_KEY) headers['x-api-key'] = JOBS_API_KEY;
             const response = await fetch(JOBS_API_URL, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers,
                 body: JSON.stringify({ jobs: batch })
             });
             const result = await response.json().catch(() => ({}));

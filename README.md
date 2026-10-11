@@ -46,7 +46,17 @@ In another terminal, from the project root:
 node scripts/himalayas-jobs/scrape.mjs
 ```
 
-The backend must be running at `http://localhost:5000` and connected to PostgreSQL. Set `JOBS_API_URL` if the API uses another address. The scraper deduplicates records while collecting them, periodically saves progress, then uploads jobs in size-limited batches. It stores the source API records in their raw shape; the API maps the common Himalayas fields. If the upload fails, the JSON file remains available and the script exits with an error.
+The backend must be running and connected to PostgreSQL. Set `JOBS_API_URL` to the API endpoint if it is not at `http://localhost:5000/api/jobs`. For a deployed API, set `JOBS_API_KEY` to the same secret configured on the backend. The scraper deduplicates records while collecting them, periodically saves progress, then uploads jobs in size-limited batches. It stores the source API records in their raw shape; the API maps the common Himalayas fields. If the upload fails, the JSON file remains available and the script exits with an error.
+
+To upload to a deployed Render backend from PowerShell, set these in the same terminal before running the scraper:
+
+```powershell
+$env:JOBS_API_URL = "https://YOUR-RENDER-SERVICE.onrender.com/api/jobs"
+$env:JOBS_API_KEY = "YOUR_RENDER_JOBS_API_KEY"
+node scripts\himalayas-jobs\scrape.mjs
+```
+
+Use your actual Render service URL and the same secret stored in the backend service's `JOBS_API_KEY` setting.
 
 ## Scrape both sources
 

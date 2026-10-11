@@ -16,7 +16,7 @@ From this directory:
 npm install
 ```
 
-Copy `.env.example` to `.env` if you have not already configured the backend, then set `DATABASE_URL` to your PostgreSQL connection string and `FRONTEND_URL` to the Next.js origin. Multiple comma-separated frontend origins are accepted. The backend `.env` in this workspace uses the latest `DATABASE_URL` from `../scripts/.env`.
+Copy `.env.example` to `.env` if you have not already configured the backend, then set `DATABASE_URL` to your PostgreSQL connection string and `FRONTEND_URL` to the Next.js origin. Multiple comma-separated frontend origins are accepted. `JOBS_API_KEY` is optional for local development, but required in production to enable job uploads.
 
 ```bash
 npm run prisma:generate
@@ -33,6 +33,18 @@ npm run import:jobs -- "D:\\path\\to\\jobs.json"
 
 Use `npm start` in production after setting `NODE_ENV=production`. Do not commit `.env`.
 
+### Render environment
+
+For the backend Web Service, set the Root Directory to `backend`, the Build Command to `npm ci && npx prisma generate`, and the Start Command to `npm start`. Add these service environment variables in Render:
+
+| Key | Value |
+| --- | --- |
+| `DATABASE_URL` | Neon PostgreSQL connection string |
+| `FRONTEND_URL` | `https://career-five-self.vercel.app` |
+| `JOBS_API_KEY` | A long random secret; keep it private |
+
+Render provides `PORT` and sets `NODE_ENV=production` for Node services. Apply the Prisma schema to Neon once with `npx prisma db push` using the database connection URL before relying on the API.
+
 ## API
 
 Base URL: `http://localhost:5000`
@@ -46,15 +58,18 @@ Base URL: `http://localhost:5000`
 
 ### Add scraped jobs
 
-Send up to 500 jobs per request as `{ "jobs": [...] }`. The endpoint accepts the normalized scraper fields (`source`, `jobId`, `title`, `company`, `jobUrl`, `postedAt`, etc.) and also recognizes common raw Himalayas fields such as `guid`, `companyName`, `applicationLink`, `locationRestrictions`, and `pubDate`.
+Send up to 500 jobs per request as `{ "jobs": [...] }`. The endpoint accepts the normalized scraper fields (`source`, `jobId`, `title`, `company`, `jobUrl`, `postedAt`, etc.) and also recognizes common raw Himalayas fields such as `guid`, `companyName`, `applicationLink`, `locationRestrictions`, and `pubDate`. In production it requires the `x-api-key` header to match `JOBS_API_KEY`; requests are rejected if the production key is missing or incorrect.
 
 ```bash
 curl -X POST http://localhost:5000/api/jobs \
   -H "Content-Type: application/json" \
+  -H "x-api-key: YOUR_JOBS_API_KEY" \
   -d '{"jobs":[{"source":"Himalayas","jobId":"example-123","title":"Backend Developer","company":"Example Co","jobUrl":"https://example.com/jobs/123","postedAt":"2026-10-09","location":"Remote"}]}'
 ```
 
-The response reports `received`, `created`, `duplicates`, and `skipped` counts. The scraper can call this endpoint after each batch; the API writes records to PostgreSQL. The request body limit is 1 MB, so large scrape results should be split into batches.
+The response reports `received`, `created`, `duplicates`, and `skipped` counts. The scraper sends `JOBS_API_KEY` in the `x-api-key` header when configured. The request body limit is 1 MB, so large scrape results should be split into batches.
+
+To generate an upload key locally, run `node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"`, then enter the same generated value as `JOBS_API_KEY` in Render and in the scraper's environment. Do not commit the key or paste it into source code.
 
 `GET /api/jobs` supports `page`, `limit` (1–100), `search`, `location`, `country`, `city`, `jobType`, `employmentType`, `experience`, `company`, `source`, and `sort`. Text filters are case-insensitive partial matches. `search` checks title, company, skills, location, and description. `sort=newest` is the default; `sort=oldest` reverses posted-date order. `sort=relevance` is accepted and currently uses newest-first ordering because the available Prisma setup does not provide full-text relevance ranking.
 
