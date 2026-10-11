@@ -1,6 +1,15 @@
 const jobsService = require('../services/jobs.service');
 const { parsePagination } = require('../utils/pagination');
 
+async function createJobs(req, res, next) {
+  try {
+    const jobs = await jobsService.createJobs(req.body?.jobs);
+    return res.status(201).json({ success: true, ...jobs });
+  } catch (error) {
+    return next(error);
+  }
+}
+
 async function listJobs(req, res, next) {
   try {
     const result = await jobsService.listJobs(req.query, parsePagination(req.query));
@@ -23,4 +32,4 @@ async function getJob(req, res, next) {
   }
 }
 
-module.exports = { listJobs, getJob };
+module.exports = { createJobs, listJobs, getJob };

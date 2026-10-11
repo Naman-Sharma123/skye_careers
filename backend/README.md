@@ -41,7 +41,20 @@ Base URL: `http://localhost:5000`
 | --- | --- | --- |
 | GET | `/api/health` | Checks API and PostgreSQL connectivity |
 | GET | `/api/jobs` | Paginated jobs; defaults to page 1 and 20 results |
+| POST | `/api/jobs` | Bulk inserts scraper jobs; skips duplicate dedupe keys |
 | GET | `/api/jobs/:id` | Full details for one database job ID |
+
+### Add scraped jobs
+
+Send up to 500 jobs per request as `{ "jobs": [...] }`. The endpoint accepts the normalized scraper fields (`source`, `jobId`, `title`, `company`, `jobUrl`, `postedAt`, etc.) and also recognizes common raw Himalayas fields such as `guid`, `companyName`, `applicationLink`, `locationRestrictions`, and `pubDate`.
+
+```bash
+curl -X POST http://localhost:5000/api/jobs \
+  -H "Content-Type: application/json" \
+  -d '{"jobs":[{"source":"Himalayas","jobId":"example-123","title":"Backend Developer","company":"Example Co","jobUrl":"https://example.com/jobs/123","postedAt":"2026-10-09","location":"Remote"}]}'
+```
+
+The response reports `received`, `created`, `duplicates`, and `skipped` counts. The scraper can call this endpoint after each batch; the API writes records to PostgreSQL. The request body limit is 1 MB, so large scrape results should be split into batches.
 
 `GET /api/jobs` supports `page`, `limit` (1–100), `search`, `location`, `country`, `city`, `jobType`, `employmentType`, `experience`, `company`, `source`, and `sort`. Text filters are case-insensitive partial matches. `search` checks title, company, skills, location, and description. `sort=newest` is the default; `sort=oldest` reverses posted-date order. `sort=relevance` is accepted and currently uses newest-first ordering because the available Prisma setup does not provide full-text relevance ranking.
 

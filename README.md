@@ -33,13 +33,20 @@ npm install
 
 ## Scrape Himalayas
 
-The dedicated Himalayas scraper requests up to 10,000 jobs and saves progress to `output/himalayas_jobs.json`:
+The dedicated Himalayas scraper requests up to 10,000 jobs, saves progress to `output/himalayas_jobs.json`, and posts the completed results to the backend API:
+
+```bash
+cd backend
+npm run dev
+```
+
+In another terminal, from the project root:
 
 ```bash
 node scripts/himalayas-jobs/scrape.mjs
 ```
 
-It deduplicates records while collecting them and periodically saves progress, so the output file can be retained if a run ends early. This script stores the source API records in their raw shape.
+The backend must be running at `http://localhost:5000` and connected to PostgreSQL. Set `JOBS_API_URL` if the API uses another address. The scraper deduplicates records while collecting them, periodically saves progress, then uploads jobs in size-limited batches. It stores the source API records in their raw shape; the API maps the common Himalayas fields. If the upload fails, the JSON file remains available and the script exits with an error.
 
 ## Scrape both sources
 
@@ -65,7 +72,7 @@ node scripts/importJobs.js ..\himalayas_jobs.json
 
 Set `DATABASE_URL` in `backend/.env` before running the Prisma or importer commands. The importer reports imported, duplicate, skipped, and invalid records. See [`backend/README.md`](backend/README.md) for database setup and API details.
 
-The dedicated `scripts/himalayas-jobs/scrape.mjs` output is raw API data, so use the normalized output from `scripts/scrapper.js` for the importer as written.
+The dedicated `scripts/himalayas-jobs/scrape.mjs` sends its raw Himalayas records to `POST /api/jobs`; use the JSON importer above when you want to import a saved, normalized JSON file instead.
 
 ## Wellfound pipeline
 

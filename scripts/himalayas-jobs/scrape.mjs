@@ -6,15 +6,45 @@ import { Worker, isMainThread, parentPort, workerData } from 'node:worker_thread
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Target output path: job-scrapper/output/himalayas_jobs.json
+// Output JSON location
 const OUTPUT_DIR = path.resolve(__dirname, '../../output');
 const OUTPUT_FILE = path.join(OUTPUT_DIR, 'himalayas_jobs.json');
 
 const TARGET_JOBS_COUNT = 10000;
 const BASE_URL = 'https://himalayas.app/jobs/api';
 const DELAY_MS = 250;
+const JOBS_API_URL = process.env.JOBS_API_URL || 'http://localhost:5000/api/jobs';
+const API_BATCH_MAX_BYTES = 700 * 1024;
 
 const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
+
+/**
+ * Utility to convert HTML string into clean formatted plain text
+ */
+function cleanDescription(html) {
+    if (!html) return '';
+
+    return html
+        // 1. Convert headers into clean sections
+        .replace(/<h[1-6][^>]*>(.*?)<\/h[1-6]>/gi, '\n\n=== $1 ===\n')
+        // 2. Convert bullet list items into clean text bullets
+        .replace(/<li[^>]*>(.*?)<\/li>/gi, '• $1\n')
+        // 3. Convert paragraphs & line breaks into newlines
+        .replace(/<\/p>/gi, '\n\n')
+        .replace(/<br\s*\/?>/gi, '\n')
+        // 4. Strip all remaining HTML tags
+        .replace(/<[^>]+>/g, '')
+        // 5. Decode common HTML entities
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'")
+        .replace(/&nbsp;/g, ' ')
+        // 6. Clean up trailing/excessive whitespace
+        .replace(/\n\s*\n\s*\n/g, '\n\n')
+        .trim();
+}
 
 // ==========================================
 // 1. MASTER THREAD LOGIC
@@ -26,22 +56,30 @@ if (isMainThread) {
         fs.mkdirSync(OUTPUT_DIR, { recursive: true });
     }
 
-    console.log(`🚀 Master Process Started | Objective: Fetch ${TARGET_JOBS_COUNT} unique jobs in batches...`);
+    console.log(`🚀 Master Process Started | Objective: Fetch ${TARGET_JOBS_COUNT} unique jobs...`);
 
-    // Spawns worker thread pointing to this exact same file
     const worker = new Worker(__filename, {
         workerData: { targetCount: TARGET_JOBS_COUNT }
     });
 
     let batchCounter = 0;
+    let isFinishing = false;
 
     worker.on('message', (msg) => {
         if (msg.type === 'BATCH') {
             let addedCount = 0;
-            for (const job of msg.jobs) {
-                const key = job.id || job.url || `${job.title}-${job.company}`;
+            
+            for (const rawJob of msg.jobs) {
+                // Process and clean description text
+                const formattedJob = {
+                    ...rawJob,
+                    description: cleanDescription(rawJob.description),
+                    excerpt: cleanDescription(rawJob.excerpt)
+                };
+
+                const key = formattedJob.id || formattedJob.url || `${formattedJob.title}-${formattedJob.company}`;
                 if (!jobsMap.has(key)) {
-                    jobsMap.set(key, job);
+                    jobsMap.set(key, formattedJob);
                     addedCount++;
                 }
             }
@@ -55,7 +93,7 @@ if (isMainThread) {
             }
 
             if (jobsMap.size >= TARGET_JOBS_COUNT) {
-                console.log(`🎯 Reached batch cap of ${TARGET_JOBS_COUNT} unique jobs.`);
+                console.log(`🎯 Reached target limit of ${TARGET_JOBS_COUNT} unique jobs.`);
                 worker.terminate();
                 finishScraping();
             }
@@ -84,14 +122,64 @@ if (isMainThread) {
     function saveToDisk() {
         const dataArray = Array.from(jobsMap.values());
         fs.writeFileSync(OUTPUT_FILE, JSON.stringify(dataArray, null, 2), 'utf-8');
-        console.log(`💾 Progress auto-saved: ${dataArray.length} unique jobs stored in output/himalayas_jobs.json`);
+        console.log(`💾 Progress auto-saved: ${dataArray.length} formatted jobs saved to output/himalayas_jobs.json`);
     }
 
-    function finishScraping() {
+    async function finishScraping() {
+        if (isFinishing) return;
+        isFinishing = true;
         saveToDisk();
         console.log(`\n🎉 Process Finished! Total unique jobs saved: ${jobsMap.size}`);
         console.log(`👉 File location: ${OUTPUT_FILE}`);
-        process.exit(0);
+        try {
+            const result = await uploadJobs(Array.from(jobsMap.values()));
+            console.log(`Database sync complete: ${result.created} created, ${result.duplicates} duplicates, ${result.skipped} skipped.`);
+        } catch (error) {
+            console.error(`Database sync failed: ${error.message}`);
+            console.error(`The scraped JSON is still saved at ${OUTPUT_FILE}. Start the backend and rerun the scraper to try again.`);
+            process.exitCode = 1;
+        }
+    }
+
+    async function uploadJobs(jobs) {
+        let batch = [];
+        let batchBytes = 0;
+        let created = 0;
+        let duplicates = 0;
+        let skipped = 0;
+        let uploaded = 0;
+
+        async function sendBatch() {
+            if (batch.length === 0) return;
+            const response = await fetch(JOBS_API_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ jobs: batch })
+            });
+            const result = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(result.message || `API returned HTTP ${response.status}`);
+            created += result.created || 0;
+            duplicates += result.duplicates || 0;
+            skipped += result.skipped || 0;
+            uploaded += batch.length;
+            console.log(`Database upload: ${uploaded}/${jobs.length} jobs submitted`);
+            batch = [];
+            batchBytes = 0;
+        }
+
+        for (const job of jobs) {
+            const jobBytes = Buffer.byteLength(JSON.stringify(job), 'utf8') + 1;
+            if (batch.length && (batch.length >= 500 || batchBytes + jobBytes > API_BATCH_MAX_BYTES)) {
+                await sendBatch();
+            }
+            if (jobBytes > API_BATCH_MAX_BYTES) {
+                throw new Error(`Job record exceeds the API request size limit (${jobBytes} bytes)`);
+            }
+            batch.push(job);
+            batchBytes += jobBytes;
+        }
+        await sendBatch();
+        return { created, duplicates, skipped };
     }
 
 // ==========================================
@@ -106,12 +194,11 @@ if (isMainThread) {
         while (fetchedCount < maxJobs) {
             try {
                 const url = new URL(BASE_URL);
-                url.searchParams.set('limit', '20'); // Max limit supported per endpoint call
+                url.searchParams.set('limit', '20');
                 if (cursor) {
                     url.searchParams.set('cursor', cursor);
                 }
 
-                // Standard generalized HTTP headers to mask environment origin
                 const response = await fetch(url.toString(), {
                     method: 'GET',
                     headers: {
@@ -143,7 +230,6 @@ if (isMainThread) {
                 fetchedCount += jobs.length;
                 cursor = data.nextCursor;
 
-                // Pass batch to master thread
                 parentPort.postMessage({
                     type: 'BATCH',
                     jobs,
